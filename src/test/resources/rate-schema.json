@@ -1,0 +1,10 @@
+{
+  "type": "struct",
+  "fields": [
+    {
+      "name": "rate",
+      "type": "string",
+      "nullable": true
+    }
+  ]
+}
