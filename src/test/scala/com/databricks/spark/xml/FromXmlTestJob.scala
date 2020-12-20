@@ -1,19 +1,13 @@
 package com.databricks.spark.xml
 
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.FunctionIdentifier
 import org.apache.spark.sql.streaming.Trigger
-import org.apache.spark.sql.types.DataType
-
-import scala.io.Source
 
 object FromXmlTestJob {
 
   def main(args: Array[String]): Unit = {
 
-    val jsonSchemaUrl = this.getClass.getClassLoader.getResource("rate-schema.json")
-    val schemaAsJson = Source.fromURL(jsonSchemaUrl, "UTF-8").getLines.mkString
-    val schemaAsDDL = DataType.fromJson(schemaAsJson).sql
+    val schema = "struct<rate: string>"
 
     val spark = SparkSession
       .builder
@@ -22,22 +16,22 @@ object FromXmlTestJob {
       .config("spark.driver.host", "localhost")
       .getOrCreate
 
-    spark.sessionState.functionRegistry.createOrReplaceTempFunction(
-      "from_xml", com.databricks.spark.xml.XmlToStructs)
+    XmlExtensions.register()
 
     spark
       .readStream
       .format("rate")
       .load
       .selectExpr("""concat("<?xml version='1.0' encoding='UFT-8'?><root><rate>", value, "</rate></root>") as xml""")
-      .selectExpr(s"from_xml(xml, '$schemaAsDDL') as extract")
+      .selectExpr(s"from_xml(xml, '$schema') as extract")
       .selectExpr("extract.rate")
       .writeStream
       .format("console")
+      .option("checkpointLocation", "target/checkpoints")
       .trigger(Trigger.ProcessingTime("5 seconds"))
       .start()
       .awaitTermination()
 
-    spark.sessionState.functionRegistry.dropFunction(FunctionIdentifier("from_xml"))
+    XmlExtensions.unregister()
   }
 }
